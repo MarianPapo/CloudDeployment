@@ -1,0 +1,33 @@
+---
+- name: Installation GitLab
+  hosts: all
+  become: yes
+
+  tasks:
+    - name: Mise à jour des paquets
+      apt:
+        update_cache: yes
+        upgrade: dist
+
+    - name: Installation des dépendances
+      apt:
+        name:
+          - curl
+          - openssh-server
+          - ca-certificates
+          - tzdata
+        state: present
+
+    - name: Ajout du dépôt GitLab
+      shell: |
+        curl -fsSL https://packages.gitlab.com/install/repositories/gitlab/gitlab-ee/script.deb.sh | bash
+      args:
+        executable: /bin/bash
+
+    - name: Installation de GitLab
+      apt:
+        name: gitlab-ee
+        state: present
+
+    - name: Configuration de GitLab
+      shell: gitlab-ctl reconfigure
