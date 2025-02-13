@@ -2,19 +2,18 @@ pipeline {
     agent any
 
     environment {
-        TF_VERSION = "1.5.0"
-        ANSIBLE_HOST_KEY_CHECKING = "False"
+        TF_VAR_OVH_APPLICATION_KEY = credentials('OVH_APPLICATION_KEY')
+        TF_VAR_OVH_APPLICATION_SECRET = credentials('OVH_APPLICATION_SECRET')
+        TF_VAR_OVH_CONSUMER_KEY = credentials('OVH_CONSUMER_KEY')
+        SSH_PRIVATE_KEY = credentials('SSH_PRIVATE_KEY')
+        INSTANCE_IP = '' #OVH IP address
     }
 
     stages {
-        stage('Install Dependencies') {
+        stage('Checkout') {
             steps {
                 script {
-                    sh 'apt-get update && apt-get install -y unzip sshpass'
-                    sh 'curl -fsSL https://apt.releases.hashicorp.com/gpg | apt-key add -'
-                    sh 'echo "deb https://apt.releases.hashicorp.com $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/hashicorp.list'
-                    sh 'apt-get update && apt-get install -y terraform=${TF_VERSION}'
-                    sh 'apt-get install -y ansible'
+                    checkout scm
                 }
             }
         }
@@ -22,32 +21,19 @@ pipeline {
         stage('Terraform Init & Apply') {
             steps {
                 script {
-                    dir('terraform') {
-                        sh 'terraform init'
-                        sh 'terraform apply -auto-approve'
-                        sh 'terraform output -raw server_ip > ../inventory.ini'
-                    }
+                    sh 'terraform init'
+                    sh 'terraform apply -auto-approve -var-file="OVH.tf"'
+                    def instance_ip = sh(script: "terraform output -raw instance_ip", returnStdout: true).trim()
+                    env.INSTANCE_IP = instance_ip
                 }
             }
         }
 
-        stage('Ansible Deployment') {
+        stage('Ansible Setup') {
             steps {
                 script {
-                    dir('ansible') {
-                        sh 'ansible-playbook -i ../inventory.ini playbook.yml'
-                    }
-                }
-            }
-        }
-
-        stage('Cleanup (Optional)') {
-            when { beforeAgent true; expression { return false } } // Exécution manuelle
-            steps {
-                script {
-                    dir('terraform') {
-                        sh 'terraform destroy -auto-approve'
-                    }
+                    writeFile file: 'inventory', text: "[servers]\n${env.INSTANCE_IP} ansible_user=root ansible_ssh_private_key_file=~/.ssh/id_rsa"
+                    sh 'ansible-playbook -i inventory.ini master_playbook.yml'
                 }
             }
         }
