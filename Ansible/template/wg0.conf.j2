@@ -1,0 +1,12 @@
+[Interface]
+Address = {{ item.private_ip }}/24
+ListenPort = {{ wg_port }}
+PrivateKey = {{ private_key.stdout }}
+
+{% for peer in peers if peer.name != inventory_hostname %}
+[Peer]
+PublicKey = {{ lookup('file', '/etc/wireguard/publickey') }}
+AllowedIPs = {{ peer.private_ip }}/32
+Endpoint = {{ peer.public_ip }}:{{ wg_port }}
+PersistentKeepalive = 25
+{% endfor %}
