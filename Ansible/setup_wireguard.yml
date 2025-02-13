@@ -1,0 +1,42 @@
+---
+- name: Configuration de WireGuard VPN
+  hosts: wireguard_nodes
+  become: yes
+  vars:
+    wg_interface: wg0
+    wg_port: 51820
+    wg_network: "10.10.10.0/24"
+    peers:
+      - { name: "server", private_ip: "10.10.10.1", public_ip: "192.168.1.1" }
+      - { name: "client1", private_ip: "10.10.10.2", public_ip: "192.168.1.2" }
+      - { name: "client2", private_ip: "10.10.10.3", public_ip: "192.168.1.3" }
+
+  tasks:
+    - name: Installer WireGuard
+      apt:
+        name: wireguard
+        state: present
+        update_cache: yes
+
+    - name: Générer les clés WireGuard
+      shell: >
+        umask 077 && wg genkey | tee /etc/wireguard/privatekey | wg pubkey > /etc/wireguard/publickey
+      args:
+        creates: /etc/wireguard/privatekey
+
+    - name: Lire la clé privée
+      command: cat /etc/wireguard/privatekey
+      register: private_key
+      changed_when: false
+
+    - name: Générer le fichier de configuration WireGuard
+      template:
+        src: wg0.conf.j2
+        dest: "/etc/wireguard/{{ wg_interface }}.conf"
+        mode: "0600"
+
+    - name: Activer et démarrer WireGuard
+      systemd:
+        name: "wg-quick@{{ wg_interface }}"
+        state: started
+        enabled: yes
