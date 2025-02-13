@@ -1,0 +1,14 @@
+---
+- name: Déploiement complet de l'infrastructure
+  hosts: localhost
+  become: no
+
+  tasks:
+    - name: Configurer le Bastion
+      ansible.builtin.import_playbook: setup_bastion.yml
+
+    - name: Configuration Wireguard
+      ansible.builtin.import_playbook: setup_wireguard.yml
+
+    - name: Installer GitLab
+      ansible.builtin.import_playbook: install_gitlab.yml
