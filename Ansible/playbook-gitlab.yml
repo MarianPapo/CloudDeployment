@@ -1,6 +1,6 @@
 ---
 - name: Installation GitLab
-  hosts: all
+  hosts: gitlab_server
   become: yes
 
   tasks:

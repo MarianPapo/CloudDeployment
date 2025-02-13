@@ -1,0 +1,75 @@
+---
+- name: Configurer et sécuriser le Bastion + SSH ProxyJump
+  hosts: bastion, servers
+  become: yes
+
+  tasks:
+    # 📌 Configuration SSH sur Bastion et Serveurs Privés
+    - name: Activer le forwarding SSH
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        line: "AllowTcpForwarding yes"
+        state: present
+
+    - name: Désactiver root et mot de passe SSH
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        line: "{{ item }}"
+        state: present
+      loop:
+        - "PermitRootLogin no"
+        - "PasswordAuthentication no"
+
+    - name: Redémarrer le service SSH
+      systemd:
+        name: ssh
+        state: restarted
+        enabled: yes
+
+  when: "'bastion' in group_names or 'servers' in group_names"
+
+# 📌 Sécurisation Spécifique au Bastion
+- name: Sécuriser le Bastion
+  hosts: bastion
+  become: yes
+
+  tasks:
+    - name: Installer UFW et Fail2Ban
+      apt:
+        name:
+          - ufw
+          - fail2ban
+        state: present
+        update_cache: yes
+
+    - name: Autoriser uniquement SSH depuis une IP spécifique
+      ufw:
+        rule: allow
+        proto: tcp
+        from: "{{ allowed_ip }}" #Changer en variable ou valeur fixe
+        to: any
+        port: 22
+
+    - name: Activer UFW avec politique par défaut restrictive
+      ufw:
+        state: enabled
+        policy: deny
+
+    - name: Configurer Fail2Ban pour SSH
+      copy:
+        dest: /etc/fail2ban/jail.local
+        content: |
+          [sshd]
+          enabled = true
+          port = ssh
+          filter = sshd
+          logpath = /var/log/auth.log
+          maxretry = 5
+          bantime = 3600
+      notify: Restart Fail2Ban
+
+  handlers:
+    - name: Restart Fail2Ban
+      systemd:
+        name: fail2ban
+        state: restarted
